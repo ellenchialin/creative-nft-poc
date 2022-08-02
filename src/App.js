@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
+import { ethers, utils } from 'ethers'
 import styled from 'styled-components'
+
+import CreativeNFTPOC from './utils/CreativeNFTPOC.json'
+import { locations } from './utils/locationList'
 
 const Container = styled.div`
   height: 100vh;
@@ -28,21 +32,21 @@ const MintButton = styled.button`
   cursor: pointer;
 `
 
+const CONTRACT = '0xb965d3ac07188acf3e31b77bc8394c7df45d3b29'
+
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [timezone, setTimezone] = useState('')
   const [location, setLocation] = useState('taipei')
   const [currentAccount, setCurrentAccount] = useState(null)
 
-  const getLocalTime = async () => {
-    const locationQuery = new URLSearchParams(window.location.search).get(
-      'location'
-    )
-
-    // console.log('location: ', locationQuery)
+  const getLocalTime = async (location) => {
+    // const locationQuery = new URLSearchParams(window.location.search).get(
+    //   'location'
+    // )
 
     const res = await fetch(
-      `https://timezone.abstractapi.com/v1/current_time/?api_key=fe70b53cf8d54ed4ac6b92eff7547006&location=${locationQuery}`
+      `https://timezone.abstractapi.com/v1/current_time/?api_key=fe70b53cf8d54ed4ac6b92eff7547006&location=${location}`
     )
     const data = await res.json()
 
@@ -74,16 +78,49 @@ function App() {
     }
   }
 
-  const handleMint = () => {
+  const handleMint = async () => {
     console.log('Click mint')
+
+    const seed = await getSeed(1)
+    const parsed = parseInt(Number(seed), 10)
+    console.log('seed from contract: ', seed)
+    console.log('parsed: ', parsed)
+
+    const matchedLocation = locations.find(
+      (location) => location.id === parsed
+    ).location
+    console.log(matchedLocation)
+
+    getLocalTime(matchedLocation)
+  }
+
+  const getSeed = async (tokenId) => {
+    try {
+      const { ethereum } = window
+      if (ethereum) {
+        const provider = new ethers.providers.Web3Provider(ethereum)
+        const signer = provider.getSigner()
+        const connectedContract = new ethers.Contract(
+          CONTRACT,
+          CreativeNFTPOC.abi,
+          signer
+        )
+
+        console.log('connectedContract: ', connectedContract)
+
+        let seed = await connectedContract.getSeed(tokenId)
+
+        return seed
+      } else {
+        alert('Please connect to wallet first and try again.')
+      }
+    } catch (error) {
+      console.log(error)
+    }
   }
 
   useEffect(() => {
     checkIfWalletIsConnected()
-  }, [])
-
-  useEffect(() => {
-    // getLocalTime()
   }, [])
 
   useEffect(() => {
@@ -98,7 +135,6 @@ function App() {
     <Container>
       {currentAccount && (
         <ColumnContainer>
-          <p>{currentAccount}</p>
           <MintButton onClick={handleMint}>Mint</MintButton>
         </ColumnContainer>
       )}
