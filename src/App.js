@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ethers, utils } from 'ethers'
+import { ethers } from 'ethers'
 import styled from 'styled-components'
 
 import CreativeNFTPOC from './utils/CreativeNFTPOC.json'
@@ -24,7 +24,7 @@ const ColumnContainer = styled.div`
   gap: 1rem;
 `
 
-const MintButton = styled.button`
+const ActionButton = styled.button`
   background-color: rgba(98, 121, 174, 0.46);
   color: #fff;
   padding: 0.6rem 1.2rem;
@@ -77,7 +77,7 @@ function App() {
 
         console.log('connectedContract: ', connectedContract)
 
-        let nftTxn = await connectedContract.mint()
+        let nftTxn = await connectedContract.mint(1)
 
         await nftTxn
         console.log('nftTxn: ', nftTxn.hash)
@@ -92,23 +92,28 @@ function App() {
   const getSeed = async (tokenId) => {
     try {
       const { ethereum } = window
-      if (ethereum) {
-        const provider = new ethers.providers.Web3Provider(ethereum)
-        const signer = provider.getSigner()
-        const connectedContract = new ethers.Contract(
-          CONTRACT,
-          CreativeNFTPOC.abi,
-          signer
-        )
 
-        console.log('connectedContract: ', connectedContract)
-
-        let seed = await connectedContract.getSeed(tokenId)
-
-        return seed
-      } else {
-        alert('Please connect to wallet first and try again.')
+      if (!ethereum) {
+        alert('Please connect to MetaMask first')
+        return
       }
+
+      const accounts = await ethereum.request({ method: 'eth_accounts' })
+      const infuraProvider = new ethers.providers.JsonRpcProvider(
+        'https://rinkeby.infura.io/v3/7d943fe8904d4be9b833a086c1f4a566'
+      )
+      const signer = infuraProvider.getSigner(accounts[0])
+      const connectedContract = new ethers.Contract(
+        CONTRACT,
+        CreativeNFTPOC.abi,
+        signer
+      )
+
+      console.log('connectedContract: ', connectedContract)
+
+      const seed = await connectedContract.getSeed(tokenId)
+
+      return seed
     } catch (error) {
       console.log(error)
     }
@@ -128,20 +133,38 @@ function App() {
 
   const getLocation = async (tokenId) => {
     const seed = await getSeed(tokenId)
-    const parsed = parseInt(Number(seed), 10)
 
-    const matchedLocation = locations.find(
-      (location) => location.id === parsed
-    ).location
+    if (seed) {
+      console.log('seed: ', seed)
+      if (
+        Number(seed) ===
+        Number(
+          0x0000000000000000000000000000000000000000000000000000000000000000
+        )
+      ) {
+        alert('Token id does not exist. Please try another token id.')
+        return
+      }
 
-    console.log(matchedLocation)
-    getLocalTime(matchedLocation)
+      const parsed = parseInt(Number(seed), 10)
+      console.log('parsed number from seed: ', parsed)
+
+      const matchedLocation = locations.find(
+        (location) => location.id === parsed
+      ).location
+
+      console.log(matchedLocation)
+      getLocalTime(matchedLocation)
+    }
   }
 
   // Check tokenId query and call getSeed(id)
   // Parse seed and match location
   // Send location request and show time
+
   useEffect(() => {
+    checkIfWalletIsConnected()
+
     const tokenIdQuery = new URLSearchParams(window.location.search).get(
       'tokenid'
     )
@@ -150,10 +173,6 @@ function App() {
       console.log('tokenId Query: ', tokenIdQuery)
       getLocation(tokenIdQuery)
     }
-  }, [])
-
-  useEffect(() => {
-    checkIfWalletIsConnected()
   }, [])
 
   useEffect(() => {
@@ -176,9 +195,7 @@ function App() {
           </p>
         </ColumnContainer>
       ) : (
-        <ColumnContainer>
-          <MintButton onClick={handleMint}>Mint</MintButton>
-        </ColumnContainer>
+        <ActionButton onClick={handleMint}>Mint</ActionButton>
       )}
     </Container>
   )
