@@ -32,30 +32,13 @@ const MintButton = styled.button`
   cursor: pointer;
 `
 
-const CONTRACT = '0xb965d3ac07188acf3e31b77bc8394c7df45d3b29'
+const CONTRACT = '0x4E974c3BC95F9e5637EF77BE165BE09c46C2e12f'
 
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [timezone, setTimezone] = useState('')
   const [location, setLocation] = useState('taipei')
   const [currentAccount, setCurrentAccount] = useState(null)
-
-  const getLocalTime = async (location) => {
-    // const locationQuery = new URLSearchParams(window.location.search).get(
-    //   'location'
-    // )
-
-    const res = await fetch(
-      `https://timezone.abstractapi.com/v1/current_time/?api_key=fe70b53cf8d54ed4ac6b92eff7547006&location=${location}`
-    )
-    const data = await res.json()
-
-    setTimezone(data.timezone_location)
-    setLocation(data.timezone_location)
-
-    // console.log('Timezone: ', data.timezone_location)
-    // console.log('Datetime: ', data.datetime)
-  }
 
   const checkIfWalletIsConnected = async () => {
     try {
@@ -67,7 +50,7 @@ function App() {
       }
 
       const accounts = await ethereum.request({ method: 'eth_accounts' })
-      console.log('Connected account: ', accounts[0])
+      console.log('Connected wallet: ', accounts[0])
 
       if (accounts.length !== 0) {
         const account = accounts[0]
@@ -81,17 +64,29 @@ function App() {
   const handleMint = async () => {
     console.log('Click mint')
 
-    const seed = await getSeed(1)
-    const parsed = parseInt(Number(seed), 10)
-    console.log('seed from contract: ', seed)
-    console.log('parsed: ', parsed)
+    try {
+      const { ethereum } = window
+      if (ethereum) {
+        const provider = new ethers.providers.Web3Provider(ethereum)
+        const signer = provider.getSigner()
+        const connectedContract = new ethers.Contract(
+          CONTRACT,
+          CreativeNFTPOC.abi,
+          signer
+        )
 
-    const matchedLocation = locations.find(
-      (location) => location.id === parsed
-    ).location
-    console.log(matchedLocation)
+        console.log('connectedContract: ', connectedContract)
 
-    getLocalTime(matchedLocation)
+        let nftTxn = await connectedContract.mint()
+
+        await nftTxn
+        console.log('nftTxn: ', nftTxn.hash)
+      } else {
+        alert('Please connect to wallet first and try again.')
+      }
+    } catch (error) {
+      console.log(error)
+    }
   }
 
   const getSeed = async (tokenId) => {
@@ -119,6 +114,44 @@ function App() {
     }
   }
 
+  const getLocalTime = async (location) => {
+    const res = await fetch(
+      `https://timezone.abstractapi.com/v1/current_time/?api_key=fe70b53cf8d54ed4ac6b92eff7547006&location=${location}`
+    )
+    const data = await res.json()
+
+    setTimezone(data.timezone_location)
+    setLocation(data.timezone_location)
+
+    console.log('Location Data: ', data)
+  }
+
+  const getLocation = async (tokenId) => {
+    const seed = await getSeed(tokenId)
+    const parsed = parseInt(Number(seed), 10)
+
+    const matchedLocation = locations.find(
+      (location) => location.id === parsed
+    ).location
+
+    console.log(matchedLocation)
+    getLocalTime(matchedLocation)
+  }
+
+  // Check tokenId query and call getSeed(id)
+  // Parse seed and match location
+  // Send location request and show time
+  useEffect(() => {
+    const tokenIdQuery = new URLSearchParams(window.location.search).get(
+      'tokenid'
+    )
+
+    if (tokenIdQuery) {
+      console.log('tokenId Query: ', tokenIdQuery)
+      getLocation(tokenIdQuery)
+    }
+  }, [])
+
   useEffect(() => {
     checkIfWalletIsConnected()
   }, [])
@@ -133,12 +166,7 @@ function App() {
 
   return (
     <Container>
-      {currentAccount && (
-        <ColumnContainer>
-          <MintButton onClick={handleMint}>Mint</MintButton>
-        </ColumnContainer>
-      )}
-      {timezone && (
+      {timezone ? (
         <ColumnContainer>
           <h2>{location}</h2>
           <p>
@@ -146,6 +174,10 @@ function App() {
               timeZone: timezone
             })}
           </p>
+        </ColumnContainer>
+      ) : (
+        <ColumnContainer>
+          <MintButton onClick={handleMint}>Mint</MintButton>
         </ColumnContainer>
       )}
     </Container>
